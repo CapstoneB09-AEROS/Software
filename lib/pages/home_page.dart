@@ -4,6 +4,7 @@ import '../widgets/air_quality_card.dart';
 import '../widgets/device_status_card.dart';
 import 'history_page.dart';
 import 'notification_page.dart';
+import '../services/supabase_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,45 +16,66 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
 
-  bool isWarning = false;
+  final SupabaseService _supabaseService = SupabaseService();
 
-  double normalCO = 17;
-  double normalCO2 = 819;
+  // DATA DARI SUPABASE
+  double currentCO = 0;
+  double currentCO2 = 0;
 
-  double warningCO = 40;
-  double warningCO2 = 1700;
+  String systemStatus = 'NORMAL';
+  String buzzerStatus = 'OFF';
+  String windowStatus = 'CLOSED';
+
+  int windowPosition = 0;
 
   bool driverAcknowledged = false;
+  bool isLoading = true;
 
-  double get currentCO {
-    return isWarning ? warningCO : normalCO;
+  @override
+  void initState() {
+    super.initState();
+    _loadDeviceState();
   }
 
-  double get currentCO2 {
-    return isWarning ? warningCO2 : normalCO2;
-  }
+  // ============================================================
+  // MENGAMBIL DATA DARI SUPABASE
+  // ============================================================
 
-  String get systemStatus {
-    return isWarning ? 'Waspada' : 'Normal';
-  }
+  Future<void> _loadDeviceState() async {
+    try {
+      final data = await _supabaseService.getDeviceState();
 
-  String get buzzerStatus {
-    if (!isWarning) {
-      return 'Tidak Aktif';
+      if (data == null) {
+        setState(() {
+          isLoading = false;
+        });
+        return;
+      }
+
+      setState(() {
+        currentCO = (data['last_co_ppm'] ?? 0).toDouble();
+        currentCO2 = (data['last_co2_ppm'] ?? 0).toDouble();
+
+        systemStatus = data['status'] ?? 'NORMAL';
+        buzzerStatus = data['buzzer_state'] ?? 'OFF';
+        windowStatus = data['window_status'] ?? 'CLOSED';
+
+        windowPosition = (data['window_position'] ?? 0) as int;
+
+        isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Gagal mengambil data device_state: $e');
+
+      setState(() {
+        isLoading = false;
+      });
     }
-
-    return driverAcknowledged ? 'Tidak Aktif' : 'Aktif';
   }
 
-  String get windowStatus {
-    return isWarning ? 'Terbuka' : 'Tertutup';
-  }
-
-  int get windowPosition {
-    return isWarning ? 50 : 0;
-  }
-
+  // ============================================================
   // NAVIGATION
+  // ============================================================
 
   void _onItemTapped(int index) {
     setState(() {
@@ -61,11 +83,12 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // ============================================================
   // APP BAR
+  // ============================================================
 
   PreferredSizeWidget? _getAppBar() {
     // BERANDA
-
     if (_selectedIndex == 0) {
       return AppBar(
         backgroundColor: const Color(0xFF5B82D6),
@@ -87,18 +110,14 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
 
-        // Tombol untuk mengubah NORMAL / WARNING
-        // hanya untuk testing sementara
+        // TOMBOL REFRESH DATA SUPABASE
         actions: [
           IconButton(
-            tooltip: 'Test Normal / Warning',
+            tooltip: 'Refresh',
             onPressed: () {
-              setState(() {
-                isWarning = !isWarning;
-                driverAcknowledged = false;
-              });
+              _loadDeviceState();
             },
-            icon: const Icon(Icons.swap_horiz),
+            icon: const Icon(Icons.refresh),
           ),
         ],
       );
@@ -106,6 +125,10 @@ class _HomePageState extends State<HomePage> {
 
     return null;
   }
+
+  // ============================================================
+  // BODY
+  // ============================================================
 
   Widget _getBody() {
     if (_selectedIndex == 0) {
@@ -119,7 +142,13 @@ class _HomePageState extends State<HomePage> {
     return const NotificationPage();
   }
 
+  // ============================================================
+  // HOME PAGE
+  // ============================================================
+
   Widget _buildHomePage() {
+    final bool isWarning = systemStatus.toUpperCase() == 'WARNING';
+
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
@@ -127,6 +156,10 @@ class _HomePageState extends State<HomePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ==================================================
+            // STATUS SISTEM
+            // ==================================================
+
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -144,7 +177,8 @@ class _HomePageState extends State<HomePage> {
                   ),
 
                   child: Text(
-                    systemStatus,
+                    systemStatus == 'WARNING' ? 'Waspada' : 'Normal',
+
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
@@ -159,6 +193,9 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 10),
 
+            // ==================================================
+            // CO
+            // ==================================================
             AirQualityCard(
               title: 'Karbon Monoksida (CO)',
               value: currentCO,
@@ -170,17 +207,23 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
+            // ==================================================
+            // CO2
+            // ==================================================
             AirQualityCard(
               title: 'Karbon Dioksida (CO₂)',
               value: currentCO2,
               unit: 'ppm',
               maxValue: 5000,
-              warningValue: 1000,
+              warningValue: 2500,
               icon: Icons.cloud,
             ),
 
             const SizedBox(height: 22),
 
+            // ==================================================
+            // STATUS SISTEM
+            // ==================================================
             const Text(
               'Status Sistem',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
@@ -191,22 +234,31 @@ class _HomePageState extends State<HomePage> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ==================================================
+                // BUZZER
+                // ==================================================
+
                 Expanded(
                   child: DeviceStatusCard(
                     title: 'Buzzer',
-                    status: buzzerStatus,
 
-                    isActive: isWarning && !driverAcknowledged,
+                    status: buzzerStatus == 'ON' ? 'Aktif' : 'Tidak Aktif',
 
-                    icon: isWarning && !driverAcknowledged
+                    isActive: buzzerStatus == 'ON',
+
+                    icon: buzzerStatus == 'ON'
                         ? Icons.notifications_active
                         : Icons.notifications_off,
 
-                    showButton: isWarning && !driverAcknowledged,
+                    showButton:
+                        isWarning &&
+                        buzzerStatus == 'ON' &&
+                        !driverAcknowledged,
 
                     onAcknowledge: () {
                       setState(() {
                         driverAcknowledged = true;
+                        buzzerStatus = 'OFF';
                       });
 
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -221,6 +273,9 @@ class _HomePageState extends State<HomePage> {
 
                 const SizedBox(width: 12),
 
+                // ==================================================
+                // JENDELA
+                // ==================================================
                 Expanded(
                   child: Container(
                     constraints: const BoxConstraints(minHeight: 120),
@@ -247,6 +302,8 @@ class _HomePageState extends State<HomePage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
 
                       children: [
+                        // HEADER JENDELA
+
                         Row(
                           children: [
                             Container(
@@ -285,7 +342,10 @@ class _HomePageState extends State<HomePage> {
                                 ),
 
                                 Text(
-                                  windowStatus,
+                                  windowStatus == 'OPEN'
+                                      ? 'Terbuka'
+                                      : 'Tertutup',
+
                                   style: TextStyle(
                                     fontSize: 9,
                                     color: Colors.grey.shade700,
@@ -298,6 +358,7 @@ class _HomePageState extends State<HomePage> {
 
                         const SizedBox(height: 8),
 
+                        // POSISI JENDELA
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.end,
 
@@ -325,6 +386,7 @@ class _HomePageState extends State<HomePage> {
 
                         const SizedBox(height: 5),
 
+                        // PROGRESS JENDELA
                         LinearProgressIndicator(
                           value: windowPosition / 100,
 
@@ -349,6 +411,9 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 18),
 
+            // ==================================================
+            // REKOMENDASI SAAT WARNING
+            // ==================================================
             if (isWarning)
               Container(
                 width: double.infinity,
@@ -374,13 +439,13 @@ class _HomePageState extends State<HomePage> {
 
                     const SizedBox(width: 10),
 
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Kualitas udara perlu diperhatikan. '
                         'Ikuti rekomendasi sistem dan pastikan '
                         'kondisi kendaraan tetap aman.',
 
-                        style: TextStyle(fontSize: 11, height: 1.4),
+                        style: const TextStyle(fontSize: 11, height: 1.4),
                       ),
                     ),
                   ],
@@ -392,12 +457,18 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // ============================================================
+  // BUILD
+  // ============================================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: _getAppBar(),
 
-      body: _getBody(),
+      body: isLoading && _selectedIndex == 0
+          ? const Center(child: CircularProgressIndicator())
+          : _getBody(),
 
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
@@ -409,25 +480,19 @@ class _HomePageState extends State<HomePage> {
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
-
             selectedIcon: Icon(Icons.home),
-
             label: 'Beranda',
           ),
 
           NavigationDestination(
             icon: Icon(Icons.history_outlined),
-
             selectedIcon: Icon(Icons.history),
-
             label: 'Riwayat',
           ),
 
           NavigationDestination(
             icon: Icon(Icons.notifications_none_outlined),
-
             selectedIcon: Icon(Icons.notifications),
-
             label: 'Notifikasi',
           ),
         ],
