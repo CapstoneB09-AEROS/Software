@@ -22,9 +22,7 @@ class _HistoryPageState extends State<HistoryPage> {
   // Menyimpan tanggal data yang sedang ditampilkan
   DateTime? dataDate;
 
-  // ============================================================
   // INIT
-  // ============================================================
 
   @override
   void initState() {
@@ -32,9 +30,7 @@ class _HistoryPageState extends State<HistoryPage> {
     _loadSensorReadings();
   }
 
-  // ============================================================
   // AMBIL DATA SENSOR
-  // ============================================================
 
   Future<void> _loadSensorReadings() async {
     setState(() {
@@ -69,9 +65,7 @@ class _HistoryPageState extends State<HistoryPage> {
         return;
       }
 
-      // ----------------------------------------------------------
       // Tentukan tanggal data terbaru
-      // ----------------------------------------------------------
 
       DateTime? latestDate;
 
@@ -91,9 +85,7 @@ class _HistoryPageState extends State<HistoryPage> {
         break;
       }
 
-      // ----------------------------------------------------------
       // Hanya tampilkan data pada tanggal terbaru
-      // ----------------------------------------------------------
 
       List<Map<String, dynamic>> filteredData = [];
 
@@ -143,9 +135,7 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  // ============================================================
   // DATA GRAFIK
-  // ============================================================
 
   List<FlSpot> get chartData {
     final List<FlSpot> spots = [];
@@ -174,9 +164,7 @@ class _HistoryPageState extends State<HistoryPage> {
     return spots;
   }
 
-  // ============================================================
   // NILAI MAKSIMUM Y
-  // ============================================================
 
   double get maxY {
     if (sensorReadings.isEmpty) {
@@ -219,9 +207,7 @@ class _HistoryPageState extends State<HistoryPage> {
     return ((highest / 1000).ceil() * 1000).toDouble();
   }
 
-  // ============================================================
   // INTERVAL Y
-  // ============================================================
 
   double get intervalY {
     if (selectedSensor == 'CO') {
@@ -231,9 +217,7 @@ class _HistoryPageState extends State<HistoryPage> {
     return 1000;
   }
 
-  // ============================================================
   // FORMAT WAKTU
-  // ============================================================
 
   String _formatTime(DateTime dateTime) {
     final localTime = dateTime.toLocal();
@@ -242,9 +226,7 @@ class _HistoryPageState extends State<HistoryPage> {
         '${localTime.minute.toString().padLeft(2, '0')}';
   }
 
-  // ============================================================
   // FORMAT TANGGAL
-  // ============================================================
 
   String _formatDate(DateTime? date) {
     if (date == null) {
@@ -256,9 +238,7 @@ class _HistoryPageState extends State<HistoryPage> {
         '${date.year}';
   }
 
-  // ============================================================
   // LABEL X
-  // ============================================================
 
   String _getBottomLabel(double value) {
     if (sensorReadings.isEmpty) {
@@ -282,9 +262,7 @@ class _HistoryPageState extends State<HistoryPage> {
     return _formatTime(createdAt);
   }
 
-  // ============================================================
   // BUILD
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -294,9 +272,7 @@ class _HistoryPageState extends State<HistoryPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // ==================================================
             // HEADER
-            // ==================================================
 
             Container(
               width: double.infinity,
@@ -320,9 +296,7 @@ class _HistoryPageState extends State<HistoryPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
 
                 children: [
-                  // ==================================================
                   // JUDUL + DROPDOWN
-                  // ==================================================
 
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -439,9 +413,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
                   const SizedBox(height: 20),
 
-                  // ==================================================
                   // GRAFIK
-                  // ==================================================
                   Container(
                     height: 260,
                     width: double.infinity,
@@ -460,9 +432,7 @@ class _HistoryPageState extends State<HistoryPage> {
               ),
             ),
 
-            // ==================================================
             // LOG KEJADIAN
-            // ==================================================
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
@@ -498,9 +468,7 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  // ============================================================
   // CHART
-  // ============================================================
 
   Widget _buildChart() {
     if (isLoading) {
@@ -566,9 +534,7 @@ class _HistoryPageState extends State<HistoryPage> {
       );
     }
 
-    // ==========================================================
     // Tentukan interval X
-    // ==========================================================
 
     double xInterval = 1;
 
@@ -586,9 +552,7 @@ class _HistoryPageState extends State<HistoryPage> {
 
         maxY: maxY,
 
-        // ======================================================
         // GRID
-        // ======================================================
         gridData: FlGridData(
           show: true,
 
@@ -605,14 +569,10 @@ class _HistoryPageState extends State<HistoryPage> {
           },
         ),
 
-        // ======================================================
         // BORDER
-        // ======================================================
         borderData: FlBorderData(show: false),
 
-        // ======================================================
         // TITLES
-        // ======================================================
         titlesData: FlTitlesData(
           topTitles: const AxisTitles(
             sideTitles: SideTitles(showTitles: false),
@@ -622,9 +582,7 @@ class _HistoryPageState extends State<HistoryPage> {
             sideTitles: SideTitles(showTitles: false),
           ),
 
-          // --------------------------------------------------
           // Y AXIS
-          // --------------------------------------------------
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
@@ -643,9 +601,7 @@ class _HistoryPageState extends State<HistoryPage> {
             ),
           ),
 
-          // --------------------------------------------------
           // X AXIS
-          // --------------------------------------------------
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
@@ -665,9 +621,7 @@ class _HistoryPageState extends State<HistoryPage> {
           ),
         ),
 
-        // ======================================================
         // TOUCH / TOOLTIP
-        // ======================================================
         lineTouchData: LineTouchData(
           enabled: true,
 
@@ -718,9 +672,7 @@ class _HistoryPageState extends State<HistoryPage> {
           ),
         ),
 
-        // ======================================================
         // DATA LINE
-        // ======================================================
         lineBarsData: [
           LineChartBarData(
             spots: chartData,
@@ -756,9 +708,7 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  // ============================================================
   // LOG PLACEHOLDER
-  // ============================================================
 
   Widget _buildLogPlaceholder() {
     return Container(

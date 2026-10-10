@@ -100,11 +100,11 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Kualitas Udara',
+              'AEROS',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
             ),
             Text(
-              'Kab. Kendaraan',
+              'Sistem Monitoring Kualitas Udara Kendaraan',
               style: TextStyle(fontSize: 10, color: Colors.white70),
             ),
           ],
