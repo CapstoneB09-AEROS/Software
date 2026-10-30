@@ -47,8 +47,8 @@ class _HistoryPageState extends State<HistoryPage> {
 
       final response = await _supabase
           .from('sensor_readings')
-          .select('co_ppm, co2_ppm, status, created_at')
-          .order('created_at', ascending: false)
+          .select('co_ppm, co2_ppm, status, measured_at')
+          .order('measured_at', ascending: false)
           .limit(500);
 
       final List<Map<String, dynamic>> data = List<Map<String, dynamic>>.from(
@@ -70,15 +70,15 @@ class _HistoryPageState extends State<HistoryPage> {
       DateTime? latestDate;
 
       for (final item in data) {
-        final createdAt = DateTime.tryParse(
-          item['created_at']?.toString() ?? '',
+        final measuredAt = DateTime.tryParse(
+          item['measured_at']?.toString() ?? '',
         );
 
-        if (createdAt == null) {
+        if (measuredAt == null) {
           continue;
         }
 
-        final localDate = createdAt.toLocal();
+        final localDate = measuredAt.toLocal();
 
         latestDate = DateTime(localDate.year, localDate.month, localDate.day);
 
@@ -91,15 +91,15 @@ class _HistoryPageState extends State<HistoryPage> {
 
       if (latestDate != null) {
         filteredData = data.where((item) {
-          final createdAt = DateTime.tryParse(
-            item['created_at']?.toString() ?? '',
+          final measuredAt = DateTime.tryParse(
+            item['measured_at']?.toString() ?? '',
           );
 
-          if (createdAt == null) {
+          if (measuredAt == null) {
             return false;
           }
 
-          final localDate = createdAt.toLocal();
+          final localDate = measuredAt.toLocal();
 
           return localDate.year == latestDate!.year &&
               localDate.month == latestDate.month &&
@@ -108,9 +108,9 @@ class _HistoryPageState extends State<HistoryPage> {
 
         // Urutkan dari waktu paling lama → terbaru
         filteredData.sort((a, b) {
-          final dateA = DateTime.tryParse(a['created_at']?.toString() ?? '');
+          final dateA = DateTime.tryParse(a['measured_at']?.toString() ?? '');
 
-          final dateB = DateTime.tryParse(b['created_at']?.toString() ?? '');
+          final dateB = DateTime.tryParse(b['measured_at']?.toString() ?? '');
 
           if (dateA == null || dateB == null) {
             return 0;
@@ -251,15 +251,15 @@ class _HistoryPageState extends State<HistoryPage> {
       return '';
     }
 
-    final createdAt = DateTime.tryParse(
-      sensorReadings[index]['created_at']?.toString() ?? '',
+    final measuredAt = DateTime.tryParse(
+      sensorReadings[index]['measured_at']?.toString() ?? '',
     );
 
-    if (createdAt == null) {
+    if (measuredAt == null) {
       return '';
     }
 
-    return _formatTime(createdAt);
+    return _formatTime(measuredAt);
   }
 
   // BUILD
@@ -270,6 +270,7 @@ class _HistoryPageState extends State<HistoryPage> {
       backgroundColor: const Color(0xFFF8F9FC),
 
       body: SafeArea(
+        top: false,
         child: Column(
           children: [
             // HEADER
@@ -277,7 +278,7 @@ class _HistoryPageState extends State<HistoryPage> {
             Container(
               width: double.infinity,
 
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 28),
+              padding: const EdgeInsets.fromLTRB(24, 22, 20, 28),
 
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -642,12 +643,12 @@ class _HistoryPageState extends State<HistoryPage> {
 
                     final reading = sensorReadings[index];
 
-                    final createdAt = DateTime.tryParse(
-                      reading['created_at']?.toString() ?? '',
+                    final measuredAt = DateTime.tryParse(
+                      reading['measured_at']?.toString() ?? '',
                     );
 
-                    final time = createdAt != null
-                        ? _formatTime(createdAt)
+                    final time = measuredAt != null
+                        ? _formatTime(measuredAt)
                         : '--.--';
 
                     final value = spot.y.toStringAsFixed(2);

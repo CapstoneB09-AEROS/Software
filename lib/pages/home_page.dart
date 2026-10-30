@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../widgets/air_quality_card.dart';
@@ -22,28 +24,44 @@ class _HomePageState extends State<HomePage> {
   double currentCO = 0;
   double currentCO2 = 0;
 
-  String systemStatus = 'NORMAL';
+  String systemStatus = 'normal';
   String buzzerStatus = 'OFF';
-  String windowStatus = 'CLOSED';
+  dynamic windowStatus;
 
-  int windowPosition = 0;
+  String connectionStatus = 'offline';
+  DateTime? lastUpdatedAt;
 
-  bool driverAcknowledged = false;
   bool isLoading = true;
+  bool driverAcknowledged = false;
+
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
+
     _loadDeviceState();
+
+    // Refresh data setiap 5 detik.
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+          (_) => _loadDeviceState(),
+    );
   }
 
-  // ============================================================
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
   // MENGAMBIL DATA DARI SUPABASE
-  // ============================================================
 
   Future<void> _loadDeviceState() async {
     try {
       final data = await _supabaseService.getDeviceState();
+
+      if (!mounted) return;
 
       if (data == null) {
         setState(() {
@@ -53,19 +71,50 @@ class _HomePageState extends State<HomePage> {
       }
 
       setState(() {
-        currentCO = (data['last_co_ppm'] ?? 0).toDouble();
-        currentCO2 = (data['last_co2_ppm'] ?? 0).toDouble();
+        // CO sementara selalu bernilai 0.
+        // Tidak mengambil data dari Supabase.
+        currentCO = 0;
 
-        systemStatus = data['status'] ?? 'NORMAL';
-        buzzerStatus = data['buzzer_state'] ?? 'OFF';
-        windowStatus = data['window_status'] ?? 'CLOSED';
+        // CO2 mengambil data aktual dari Supabase.
+        currentCO2 =
+            double.tryParse(
+              data['last_co2_ppm']?.toString() ?? '',
+            ) ??
+                0;
 
-        windowPosition = (data['window_position'] ?? 0) as int;
+        systemStatus =
+            data['status']?.toString().toLowerCase() ?? 'unknown';
+
+        final rawBuzzer = data['buzzer_state'];
+        final buzzerValue =
+        rawBuzzer?.toString().trim().toUpperCase();
+
+        buzzerStatus =
+        rawBuzzer == true ||
+            rawBuzzer == 1 ||
+            ['ON', 'TRUE', '1', 'ACTIVE', 'AKTIF']
+                .contains(buzzerValue)
+            ? 'ON'
+            : 'OFF';
+
+        // Nilai dapat berupa 0, 50, atau null.
+        // Jangan menganggap angka sebagai String secara langsung.
+        windowStatus = data['window_status'];
+
+        connectionStatus =
+            data['connection_status']?.toString().toLowerCase() ??
+                'offline';
+
+        lastUpdatedAt = DateTime.tryParse(
+          data['updated_at']?.toString() ?? '',
+        );
 
         isLoading = false;
       });
     } catch (e) {
       debugPrint('Gagal mengambil data device_state: $e');
+
+      if (!mounted) return;
 
       setState(() {
         isLoading = false;
@@ -73,9 +122,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // ============================================================
   // NAVIGATION
-  // ============================================================
 
   void _onItemTapped(int index) {
     setState(() {
@@ -83,40 +130,50 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
-  // ============================================================
   // APP BAR
-  // ============================================================
 
   PreferredSizeWidget? _getAppBar() {
-    // BERANDA
     if (_selectedIndex == 0) {
       return AppBar(
         backgroundColor: const Color(0xFF5B82D6),
         foregroundColor: Colors.white,
         elevation: 0,
         titleSpacing: 20,
-
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(
-              'AEROS',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            Image.asset(
+              'assets/AEROS.png',
+              height: 40,
+              width: 45,
+              fit: BoxFit.contain,
             ),
-            Text(
-              'Sistem Monitoring Kualitas Udara Kendaraan',
-              style: TextStyle(fontSize: 10, color: Colors.white70),
+            const SizedBox(width: 10),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'AEROS',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  'Sistem Monitoring Kualitas Udara Kendaraan',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-
-        // TOMBOL REFRESH DATA SUPABASE
         actions: [
           IconButton(
             tooltip: 'Refresh',
-            onPressed: () {
-              _loadDeviceState();
-            },
+            onPressed: _loadDeviceState,
             icon: const Icon(Icons.refresh),
           ),
         ],
@@ -126,9 +183,7 @@ class _HomePageState extends State<HomePage> {
     return null;
   }
 
-  // ============================================================
   // BODY
-  // ============================================================
 
   Widget _getBody() {
     if (_selectedIndex == 0) {
@@ -142,23 +197,93 @@ class _HomePageState extends State<HomePage> {
     return const NotificationPage();
   }
 
-  // ============================================================
   // HOME PAGE
-  // ============================================================
 
   Widget _buildHomePage() {
-    final bool isWarning = systemStatus.toUpperCase() == 'WARNING';
+    final status = systemStatus.toLowerCase();
+
+    final bool isNormal = status == 'normal';
+    final bool isWarning = status == 'waspada';
+    final bool isDanger = status == 'bahaya';
+
+    final bool isOffline = connectionStatus != 'online';
+
+    final bool isDataStale = lastUpdatedAt == null ||
+        DateTime.now().difference(lastUpdatedAt!).inSeconds > 30;
+
+    final bool isDataUnavailable = isOffline || isDataStale;
+
+    final statusColor = isDanger
+        ? Colors.red
+        : isWarning
+        ? Colors.orange
+        : isNormal
+        ? Colors.green
+        : Colors.grey;
+
+    final statusLabel = isDanger
+        ? 'Bahaya'
+        : isWarning
+        ? 'Waspada'
+        : isNormal
+        ? 'Normal'
+        : 'Status tidak diketahui';
+
+    // Jika koneksi putus atau data kedaluwarsa,
+    // jangan menampilkan status lama sebagai kondisi terkini.
+    final displayStatusColor =
+    isDataUnavailable ? Colors.grey : statusColor;
+
+    final displayStatusLabel =
+    isDataUnavailable ? 'Data tidak terbaru' : statusLabel;
+
+    // window_status berupa angka 0, 50, atau null.
+    final String windowPosition = windowStatus?.toString() ?? '';
+
+    final String windowLabel = windowPosition == '0'
+        ? 'Posisi atas'
+        : windowPosition == '50'
+        ? 'Posisi bawah'
+        : 'Bergerak / tidak diketahui';
 
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ==================================================
-            // STATUS SISTEM
-            // ==================================================
+            // KONEKSI DAN KESEGARAN DATA
+
+            if (isOffline)
+              const Text(
+                'Perangkat offline. Data terbaru belum dapat dipastikan.',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 12,
+                ),
+              )
+            else if (isDataStale)
+              const Text(
+                'Data sudah lebih dari 30 detik atau belum tersedia. '
+                    'Status keselamatan belum dapat dipastikan.',
+                style: TextStyle(
+                  color: Colors.orange,
+                  fontSize: 12,
+                ),
+              )
+            else
+              Text(
+                'Perangkat online • Data diperbarui: '
+                    '${lastUpdatedAt!.toLocal()}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
+
+            const SizedBox(height: 8),
+
+            // BADGE STATUS SISTEM
 
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -168,23 +293,16 @@ class _HomePageState extends State<HomePage> {
                     horizontal: 12,
                     vertical: 6,
                   ),
-
                   decoration: BoxDecoration(
-                    color: isWarning
-                        ? Colors.orange.shade100
-                        : Colors.green.shade100,
+                    color: displayStatusColor.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-
                   child: Text(
-                    systemStatus == 'WARNING' ? 'Waspada' : 'Normal',
-
+                    displayStatusLabel,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: isWarning
-                          ? Colors.orange.shade800
-                          : Colors.green.shade700,
+                      color: displayStatusColor,
                     ),
                   ),
                 ),
@@ -193,9 +311,8 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 10),
 
-            // ==================================================
             // CO
-            // ==================================================
+
             AirQualityCard(
               title: 'Karbon Monoksida (CO)',
               value: currentCO,
@@ -207,9 +324,8 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 12),
 
-            // ==================================================
             // CO2
-            // ==================================================
+
             AirQualityCard(
               title: 'Karbon Dioksida (CO₂)',
               value: currentCO2,
@@ -221,12 +337,14 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 22),
 
-            // ==================================================
-            // STATUS SISTEM
-            // ==================================================
+            // STATUS PERANGKAT
+
             const Text(
               'Status Sistem',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
             ),
 
             const SizedBox(height: 10),
@@ -234,27 +352,22 @@ class _HomePageState extends State<HomePage> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ==================================================
                 // BUZZER
-                // ==================================================
 
                 Expanded(
                   child: DeviceStatusCard(
                     title: 'Buzzer',
-
-                    status: buzzerStatus == 'ON' ? 'Aktif' : 'Tidak Aktif',
-
+                    status: buzzerStatus == 'ON'
+                        ? 'Aktif'
+                        : 'Tidak Aktif',
                     isActive: buzzerStatus == 'ON',
-
                     icon: buzzerStatus == 'ON'
                         ? Icons.notifications_active
                         : Icons.notifications_off,
+                    showButton: true,
 
-                    showButton:
-                        isWarning &&
-                        buzzerStatus == 'ON' &&
-                        !driverAcknowledged,
-
+                    // MASIH SIMULASI.
+                    // Belum mengirim perintah ke hardware.
                     onAcknowledge: () {
                       setState(() {
                         driverAcknowledged = true;
@@ -263,7 +376,9 @@ class _HomePageState extends State<HomePage> {
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text('Peringatan telah diketahui.'),
+                          content: Text(
+                            'Buzzer dimatikan (simulasi).',
+                          ),
                           duration: Duration(seconds: 2),
                         ),
                       );
@@ -273,22 +388,20 @@ class _HomePageState extends State<HomePage> {
 
                 const SizedBox(width: 12),
 
-                // ==================================================
                 // JENDELA
-                // ==================================================
+
                 Expanded(
                   child: Container(
-                    constraints: const BoxConstraints(minHeight: 120),
-
+                    constraints: const BoxConstraints(
+                      minHeight: 120,
+                    ),
                     padding: const EdgeInsets.all(10),
-
                     decoration: BoxDecoration(
                       color: Colors.white,
-
                       borderRadius: BorderRadius.circular(12),
-
-                      border: Border.all(color: Colors.grey.shade300),
-
+                      border: Border.all(
+                        color: Colors.grey.shade300,
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.06),
@@ -297,110 +410,48 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ],
                     ),
-
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-
                       children: [
-                        // HEADER JENDELA
-
                         Row(
                           children: [
                             Container(
                               width: 32,
                               height: 32,
-
                               decoration: BoxDecoration(
-                                color: isWarning
-                                    ? Colors.orange.shade100
-                                    : Colors.green.shade100,
-
+                                color: Colors.grey.shade200,
                                 borderRadius: BorderRadius.circular(8),
                               ),
-
                               child: Icon(
                                 Icons.window,
                                 size: 18,
-                                color: isWarning
-                                    ? Colors.orange.shade700
-                                    : Colors.green.shade700,
+                                color: Colors.grey.shade700,
                               ),
                             ),
-
                             const SizedBox(width: 7),
-
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-
-                              children: [
-                                const Text(
-                                  'Jendela',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Jendela',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-
-                                Text(
-                                  windowStatus == 'OPEN'
-                                      ? 'Terbuka'
-                                      : 'Tertutup',
-
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: Colors.grey.shade700,
+                                  Text(
+                                    windowLabel,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: Colors.grey.shade700,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        // POSISI JENDELA
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-
-                          children: [
-                            Text(
-                              '$windowPosition%',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-
-                            const SizedBox(width: 5),
-
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: 2),
-
-                              child: Text(
-                                'Terbuka',
-                                style: TextStyle(fontSize: 9),
+                                ],
                               ),
                             ),
                           ],
-                        ),
-
-                        const SizedBox(height: 5),
-
-                        // PROGRESS JENDELA
-                        LinearProgressIndicator(
-                          value: windowPosition / 100,
-
-                          minHeight: 5,
-
-                          borderRadius: BorderRadius.circular(10),
-
-                          backgroundColor: Colors.grey.shade200,
-
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            isWarning
-                                ? Colors.orange.shade400
-                                : Colors.green.shade400,
-                          ),
                         ),
                       ],
                     ),
@@ -411,41 +462,49 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 18),
 
-            // ==================================================
-            // REKOMENDASI SAAT WARNING
-            // ==================================================
-            if (isWarning)
+            // REKOMENDASI WASPADA ATAU BAHAYA
+            // Hanya ditampilkan jika data masih terbaru
+            // dan perangkat sedang online.
+
+            if (!isDataUnavailable && (isWarning || isDanger))
               Container(
                 width: double.infinity,
-
                 padding: const EdgeInsets.all(12),
-
                 decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-
+                  color: isDanger
+                      ? Colors.red.shade50
+                      : Colors.orange.shade50,
                   borderRadius: BorderRadius.circular(10),
-
-                  border: Border.all(color: Colors.orange.shade200),
+                  border: Border.all(
+                    color: isDanger
+                        ? Colors.red.shade200
+                        : Colors.orange.shade200,
+                  ),
                 ),
-
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-
                   children: [
                     Icon(
                       Icons.warning_amber_rounded,
-                      color: Colors.orange.shade700,
+                      color: isDanger
+                          ? Colors.red.shade700
+                          : Colors.orange.shade700,
                     ),
-
                     const SizedBox(width: 10),
-
                     Expanded(
                       child: Text(
-                        'Kualitas udara perlu diperhatikan. '
-                        'Ikuti rekomendasi sistem dan pastikan '
-                        'kondisi kendaraan tetap aman.',
-
-                        style: const TextStyle(fontSize: 11, height: 1.4),
+                        isDanger
+                            ? 'Kualitas udara berada pada status bahaya. '
+                            'Segera ikuti prosedur keselamatan dan '
+                            'keluar dari area berisiko sesuai arahan '
+                            'petugas.'
+                            : 'Kualitas udara berstatus waspada. '
+                            'Perhatikan kondisi lingkungan dan ikuti '
+                            'rekomendasi sistem.',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          height: 1.4,
+                        ),
                       ),
                     ),
                   ],
@@ -457,39 +516,32 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // ============================================================
   // BUILD
-  // ============================================================
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: _getAppBar(),
-
       body: isLoading && _selectedIndex == 0
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+        child: CircularProgressIndicator(),
+      )
           : _getBody(),
-
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
-
         onDestinationSelected: _onItemTapped,
-
         height: 65,
-
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
             selectedIcon: Icon(Icons.home),
             label: 'Beranda',
           ),
-
           NavigationDestination(
             icon: Icon(Icons.history_outlined),
             selectedIcon: Icon(Icons.history),
             label: 'Riwayat',
           ),
-
           NavigationDestination(
             icon: Icon(Icons.notifications_none_outlined),
             selectedIcon: Icon(Icons.notifications),

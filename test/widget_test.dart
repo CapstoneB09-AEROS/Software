@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:monitoring_co2/main.dart';
+import 'package:aeros/main.dart';
 
 void main() {
   testWidgets('Monitoring CO2 app loads', (WidgetTester tester) async {
