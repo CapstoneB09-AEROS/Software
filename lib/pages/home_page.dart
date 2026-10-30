@@ -241,9 +241,9 @@ class _HomePageState extends State<HomePage> {
     final String windowPosition = windowStatus?.toString() ?? '';
 
     final String windowLabel = windowPosition == '0'
-        ? 'Posisi atas'
+        ? 'TERTUTUP'
         : windowPosition == '50'
-        ? 'Posisi bawah'
+        ? 'TERBUKA'
         : 'Bergerak / tidak diketahui';
 
     return SafeArea(
